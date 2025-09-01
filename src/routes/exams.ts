@@ -45,14 +45,22 @@ export const examsRoutes = (app: any) => {
         return { message: "Exam updated", exam: data[0] };
     });
 
-    // جلب كل الاختبارات
     app.get("/exams", async () => {
-        const { data, error } = await supabase.from("exams").select("*");
+        const now = new Date().toISOString();
+
+        const { data, error } = await supabase
+            .from('exams')
+            .select('*')
+            .eq('status', true)
+            .lte('start_time', now)
+            .gt('end_time', now);
+
         if (error) return { error: error.message };
+
         return data;
     });
 
-    // جلب اختبار واحد حسب الـ id
+
     app.get("/exams/:id", async ({ params, set }) => {
         const { id } = params;
 
@@ -60,7 +68,7 @@ export const examsRoutes = (app: any) => {
             .from("exams")
             .select("*")
             .eq("id", id)
-            .single(); // يجيب عنصر واحد فقط
+            .single();
 
         if (error) {
             set.status = 400;
