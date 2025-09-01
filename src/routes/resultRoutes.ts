@@ -4,46 +4,59 @@ import { supabase } from "../../supabase";
 export const resultsRoutes = (app: any) => {
 
     // جلب كل نتائج الطلاب لاختبار معين
-    app.get("/exams/:id/results", async ({ params }) => {
+    app.get("/exams/:id/results", async ({ params, set }) => {
         const { id } = params;
 
-        const { data, error } = await supabase
-            .from("exam_results")
-            .select("*, profiles(full_name, email)")
-            .eq("exam_id", id);
-
-        if (error) return { error: error.message };
-        return data;
-    });
-
-    // جلب نتيجة طالب معين لاختبار معين من جدول exam_submissions
-    app.get("/exams/:id/results/:user_id", async ({ params, set }) => {
-        const { id: exam_id, user_id } = params;
-
         try {
-            // جلب ملخص نتيجة الطالب
             const { data, error } = await supabase
                 .from("exam_submissions")
-                .select("*, exams(title, mark_per_question)")
-                .eq("exam_id", exam_id)
-                .eq("user_id", user_id)
-                .single(); // واحد بس لكل طالب لكل امتحان
+                .select("*, profiles(full_name, email)")
+                .eq("exam_id", id);
 
-            if (error || !data) {
-                set.status = 404;
-                return { error: error?.message || "Result not found" };
+            if (error) {
+                set.status = 500;
+                return { error: error.message };
             }
 
-            return data;
-
+            return data || [];
         } catch (err: any) {
             set.status = 500;
             return { error: err.message || "Server error" };
         }
     });
 
+    // جلب نتيجة طالب معين لاختبار معين
+    app.get("/exams/:id/results/:user_id", async ({ params, set }) => {
+        const { id: exam_id, user_id } = params;
 
-    // تقديم إجابات الامتحان وحساب النتيجة
+        try {
+            const { data, error } = await supabase
+                .from("exam_submissions")
+                .select("*, exams(title, mark_per_question)")
+                .eq("exam_id", exam_id)
+                .eq("user_id", user_id)
+                .maybeSingle();
+
+            if (error) {
+                set.status = 500;
+                return { error: error.message };
+            }
+
+            if (!data) {
+                set.status = 404;
+                return { error: "Result not found" };
+            }
+
+            return data;
+        } catch (err: any) {
+            set.status = 500;
+            return { error: err.message || "Server error" };
+        }
+    });
+
+   
+
+
     app.post("/exams/:id/submit", async ({ params, body, set }) => {
         const { id: exam_id } = params;
         const { user_id, answers } = body;
@@ -54,7 +67,7 @@ export const resultsRoutes = (app: any) => {
         }
 
         try {
-            // منع تقديم الامتحان أكثر من مرة
+
             const { data: existing, error: existError } = await supabase
                 .from("exam_submissions")
                 .select("id")
@@ -71,7 +84,7 @@ export const resultsRoutes = (app: any) => {
                 return { error: "You have already submitted this exam" };
             }
 
-            // جلب أسئلة الامتحان
+
             const { data: questions, error: qError } = await supabase
                 .from("questions")
                 .select("*")
@@ -82,12 +95,12 @@ export const resultsRoutes = (app: any) => {
                 return { error: qError?.message || "Cannot fetch questions" };
             }
 
-            // جلب علامة السؤال
+
             const { data: examInfo, error: examError } = await supabase
                 .from("exams")
                 .select("mark_per_question")
                 .eq("id", exam_id)
-                .single();
+                .maybeSingle();
 
             if (examError || !examInfo) {
                 set.status = 400;
@@ -95,8 +108,8 @@ export const resultsRoutes = (app: any) => {
             }
 
             const mark_per_question = examInfo.mark_per_question;
-
             let score = 0;
+
             const resultsToInsert = answers.map(ans => {
                 const question = questions.find(q => q.id === ans.question_id);
                 const is_correct = question?.correct_option === ans.selected_option;
@@ -109,23 +122,24 @@ export const resultsRoutes = (app: any) => {
                     selected_option: ans.selected_option,
                     is_correct
                 };
-            });
+            }).filter(r => r.question_id);
 
-            // حفظ الإجابات في exam_results
-            const { data: resultsData, error: resultsError } = await supabase
-                .from("exam_results")
-                .insert(resultsToInsert)
-                .select();
+            let resultsData: any[] = [];
+            if (resultsToInsert.length > 0) {
+                const { data: inserted, error: resultsError } = await supabase
+                    .from("exam_results")
+                    .insert(resultsToInsert)
+                    .select();
 
-            if (resultsError) {
-                set.status = 400;
-                return { error: resultsError.message };
+                if (resultsError) {
+                    set.status = 400;
+                    return { error: resultsError.message };
+                }
+                resultsData = inserted || [];
             }
 
             const totalMarks = questions.length * mark_per_question;
-            const percentage = Math.round((score / totalMarks) * 100);
 
-            // حفظ ملخص النتيجة في exam_submissions
             const { data: submissionData, error: submissionError } = await supabase
                 .from("exam_submissions")
                 .insert([{
@@ -133,9 +147,10 @@ export const resultsRoutes = (app: any) => {
                     user_id,
                     score,
                     total_marks: totalMarks,
-                    percentage
+                    percentage: Math.round((score / totalMarks) * 100)
                 }])
-                .select();
+                .select()
+                .maybeSingle();
 
             if (submissionError) {
                 set.status = 400;
@@ -146,9 +161,9 @@ export const resultsRoutes = (app: any) => {
                 message: "Exam submitted successfully",
                 score,
                 total: totalMarks,
-                percentage,
+                percentage: submissionData?.percentage || 0,
                 results: resultsData,
-                submission: submissionData[0]
+                submission: submissionData
             };
 
         } catch (err: any) {
@@ -166,7 +181,5 @@ export const resultsRoutes = (app: any) => {
             )
         })
     });
-
-
 
 };
