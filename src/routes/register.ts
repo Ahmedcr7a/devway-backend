@@ -12,36 +12,35 @@ export async function registerHandler({ body }: any) {
     return { error: "Passwords do not match" };
   }
 
-
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  const { data: lastProfile } = await supabase
+  // 1. أضف اليوزر الأول بدون student_code
+  const { data: profile, error: insertError } = await supabase
     .from("profiles")
-    .select("student_code")
-    .order("id", { ascending: false })
-    .limit(1);
+    .insert([
+      {
+        full_name,
+        email,
+        phone,
+        password: hashedPassword,
+        role: "user",
+      },
+    ])
+    .select("id")
+    .single();
 
-  let nextNumber = 1001;
-  if (lastProfile && lastProfile.length > 0) {
-    const lastCode = lastProfile[0].student_code;
-    const lastNumber = parseInt(lastCode?.split("-")[1] || "1000", 10);
-    nextNumber = lastNumber + 1;
-  }
+  if (insertError) return { error: insertError.message };
 
-  const student_code = `ST-${nextNumber}`;
+  // 2. ولّد student_code من الـ id الفريد
+  const student_code = `ST-${profile.id}`;
 
-  const { error } = await supabase.from("profiles").insert([
-    {
-      full_name,
-      email,
-      phone,
-      password: hashedPassword,
-      role: "user",
-      student_code
-    }
-  ]);
+  // 3. عدّل الحساب وأضف student_code
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ student_code })
+    .eq("id", profile.id);
 
-  if (error) return { error: error.message };
+  if (updateError) return { error: updateError.message };
 
   return { message: "Account created successfully", student_code };
 }
