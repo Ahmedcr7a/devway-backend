@@ -8,7 +8,8 @@ import { questionsRoutes } from "./routes/questions";
 import { resultsRoutes } from "./routes/resultRoutes";
 import { attachmentsRoutes } from "./routes/attachments";
 import { adminsRoutes } from "./routes/admins";
-
+import { registrationsRoutes } from "./routes/registrations";
+import { uploadRoutes } from "./routes/upload";
 const PORT = process.env.PORT || 3000;
 
 const app = new Elysia();
@@ -29,6 +30,8 @@ questionsRoutes(app);
 resultsRoutes(app);
 attachmentsRoutes(app);
 adminsRoutes(app);
+registrationsRoutes(app);
+uploadRoutes(app);
 
 app.listen(PORT);
 console.log("🚀 Backend running on http://localhost:3000");
