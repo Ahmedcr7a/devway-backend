@@ -1,6 +1,5 @@
 import { Elysia } from "elysia";
 import cors from "@elysiajs/cors";
-import multipart from "@elysiajs/multipart";
 
 import { getProfilesHandler, deleteProfileHandler, getProfileByIdHandler, updatePasswordHandler } from "./routes/getProfiles";
 import { registerHandler } from "./routes/register";
@@ -18,7 +17,6 @@ const PORT = process.env.PORT || 3000;
 const app = new Elysia();
 
 app.use(cors({ origin: "*" }));
-app.use(multipart());
 
 // Profiles
 app.get("/profiles", getProfilesHandler);
