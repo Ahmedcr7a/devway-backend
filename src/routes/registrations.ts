@@ -13,20 +13,20 @@ export const registrationsRoutes = (app: Elysia) => {
 
     // Register new user
     app.post("/registrations", async ({ body }) => {
-        const { name, phone, track, studentIdUrl } = body as {
+        const { name, phone, tracks, studentIdUrl } = body as {
             name: string;
             phone: string;
-            track: string;
-            studentIdUrl: string; // صورة الكارنية بعد الرفع
+            tracks: string[];
+            studentIdUrl: string;
         };
 
-        if (!name || !phone || !track || !studentIdUrl) {
+        if (!name || !phone || !tracks || tracks.length === 0 || !studentIdUrl) {
             return { success: false, message: "البيانات ناقصة" };
         }
 
         const { data, error } = await supabase
             .from("registrations")
-            .insert([{ name, phone, track, studentIdUrl }]);
+            .insert([{ name, phone, tracks, studentIdUrl }]);
 
         if (error) {
             return { success: false, message: error.message };
